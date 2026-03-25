@@ -16,7 +16,7 @@ process.env.GCP_BILLING_ACCOUNT_ID = '000000-000000-000000'
 
 describe('getGcpMonthlyCosts', () => {
   it('returns CloudDetailData shape without throwing', async () => {
-    const result = await getGcpMonthlyCosts('current')
+    const result = await getGcpMonthlyCosts('2026-03-01', '2026-03-24')
     expect(result.provider).toBe('gcp')
     expect(typeof result.currentMonthCost).toBe('number')
     expect(result.topServices).toBeInstanceOf(Array)
@@ -25,7 +25,7 @@ describe('getGcpMonthlyCosts', () => {
   })
 
   it('returns zero costs when stub returns empty data', async () => {
-    const result = await getGcpMonthlyCosts('current')
+    const result = await getGcpMonthlyCosts('2026-03-01', '2026-03-24')
     expect(result.currentMonthCost).toBe(0)
   })
 })

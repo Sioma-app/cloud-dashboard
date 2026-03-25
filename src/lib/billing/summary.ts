@@ -2,7 +2,7 @@ import { getGcpMonthlyCosts } from '@/lib/gcp/client'
 import { getAwsMonthlyCosts } from '@/lib/aws/client'
 import { getAzureMonthlyCosts } from '@/lib/azure/client'
 import { calcPercentChange } from '@/lib/format'
-import type { CloudDetailData, Period, SummaryData } from '@/lib/types'
+import type { CloudDetailData, SummaryData } from '@/lib/types'
 
 const EMPTY: CloudDetailData = {
   provider: 'gcp',
@@ -13,11 +13,11 @@ const EMPTY: CloudDetailData = {
   history: [],
 }
 
-export async function getBillingSummary(period: Period): Promise<SummaryData> {
+export async function getBillingSummary(startDate: string, endDate: string): Promise<SummaryData> {
   const [gcpResult, awsResult, azureResult] = await Promise.allSettled([
-    getGcpMonthlyCosts(period),
-    getAwsMonthlyCosts(period),
-    getAzureMonthlyCosts(period),
+    getGcpMonthlyCosts(startDate, endDate),
+    getAwsMonthlyCosts(startDate, endDate),
+    getAzureMonthlyCosts(startDate, endDate),
   ])
 
   if (gcpResult.status === 'rejected') console.error('[GCP summary]', gcpResult.reason)

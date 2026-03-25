@@ -1,6 +1,16 @@
 import { format, startOfMonth, subMonths } from 'date-fns'
 import type { Period, DateRange } from './types'
 
+export function parseDateRangeFromParams(params: { period?: string; from?: string; to?: string }): DateRange {
+  if (params.from && params.to) {
+    const start = `${params.from}-01`
+    const toDate = new Date(`${params.to}-01`)
+    const end = format(new Date(toDate.getFullYear(), toDate.getMonth() + 1, 0), 'yyyy-MM-dd')
+    return { start, end }
+  }
+  return getDateRange((params.period ?? 'current') as Period)
+}
+
 export function formatCurrency(amount: number, currency = 'USD'): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',

@@ -3,17 +3,17 @@ import { CloudSummaryCard } from '@/components/CloudSummaryCard'
 import { TotalBar } from '@/components/TotalBar'
 import { PeriodSelector } from '@/components/PeriodSelector'
 import { getBillingSummary } from '@/lib/billing/summary'
-import type { Period } from '@/lib/types'
+import { parseDateRangeFromParams } from '@/lib/format'
 
 // Server Component calls lib directly — no HTTP loopback to own API routes
 export default async function SummaryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>
+  searchParams: Promise<{ period?: string; from?: string; to?: string }>
 }) {
-  const { period: p } = await searchParams
-  const period = (p ?? 'current') as Period
-  const summary = await getBillingSummary(period)
+  const { period: p, from, to } = await searchParams
+  const range = parseDateRangeFromParams({ period: p, from, to })
+  const summary = await getBillingSummary(range.start, range.end)
 
   return (
     <div>

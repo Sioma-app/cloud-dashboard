@@ -30,7 +30,7 @@ process.env.AWS_DEFAULT_REGION = 'us-east-1'
 
 describe('getAwsMonthlyCosts', () => {
   it('returns CloudDetailData shape', async () => {
-    const result = await getAwsMonthlyCosts('current')
+    const result = await getAwsMonthlyCosts('2026-03-01', '2026-03-24')
     expect(result.provider).toBe('aws')
     expect(typeof result.currentMonthCost).toBe('number')
     expect(result.topServices).toBeInstanceOf(Array)
@@ -38,7 +38,7 @@ describe('getAwsMonthlyCosts', () => {
   })
 
   it('includes service breakdown sorted by cost', async () => {
-    const result = await getAwsMonthlyCosts('current')
+    const result = await getAwsMonthlyCosts('2026-03-01', '2026-03-24')
     expect(result.topServices.length).toBeGreaterThan(0)
     expect(result.topServices[0]).toHaveProperty('name')
     expect(result.topServices[0]).toHaveProperty('cost')
@@ -50,7 +50,7 @@ describe('getAwsMonthlyCosts', () => {
   })
 
   it('calculates percentOfTotal correctly', async () => {
-    const result = await getAwsMonthlyCosts('current')
+    const result = await getAwsMonthlyCosts('2026-03-01', '2026-03-24')
     const total = result.topServices.reduce((sum, s) => sum + s.cost, 0)
     result.topServices.forEach((s) => {
       const expected = total > 0 ? (s.cost / total) * 100 : 0

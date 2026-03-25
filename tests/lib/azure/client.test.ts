@@ -31,7 +31,7 @@ process.env.AZURE_SUBSCRIPTION_ID = 'test-sub'
 
 describe('getAzureMonthlyCosts', () => {
   it('returns CloudDetailData shape', async () => {
-    const result = await getAzureMonthlyCosts('current')
+    const result = await getAzureMonthlyCosts('2026-03-01', '2026-03-24')
     expect(result.provider).toBe('azure')
     expect(typeof result.currentMonthCost).toBe('number')
     expect(result.topServices).toBeInstanceOf(Array)
@@ -39,7 +39,7 @@ describe('getAzureMonthlyCosts', () => {
   })
 
   it('aggregates service costs correctly', async () => {
-    const result = await getAzureMonthlyCosts('current')
+    const result = await getAzureMonthlyCosts('2026-03-01', '2026-03-24')
     expect(result.topServices.length).toBeGreaterThan(0)
     expect(result.topServices[0]).toHaveProperty('name')
     expect(result.topServices[0]).toHaveProperty('cost')
@@ -47,7 +47,7 @@ describe('getAzureMonthlyCosts', () => {
   })
 
   it('returns history as empty array (known limitation)', async () => {
-    const result = await getAzureMonthlyCosts('current')
+    const result = await getAzureMonthlyCosts('2026-03-01', '2026-03-24')
     expect(result.history).toEqual([])
   })
 })

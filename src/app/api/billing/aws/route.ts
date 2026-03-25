@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAwsMonthlyCosts } from '@/lib/aws/client'
-import type { Period } from '@/lib/types'
+import { parseDateRangeFromParams } from '@/lib/format'
 
 export async function GET(req: NextRequest) {
-  const period = (req.nextUrl.searchParams.get('period') ?? 'current') as Period
+  const from = req.nextUrl.searchParams.get('from') ?? undefined
+  const to = req.nextUrl.searchParams.get('to') ?? undefined
+  const period = req.nextUrl.searchParams.get('period') ?? 'current'
+  const range = parseDateRangeFromParams({ period, from, to })
   try {
-    const data = await getAwsMonthlyCosts(period)
+    const data = await getAwsMonthlyCosts(range.start, range.end)
     return NextResponse.json(data)
   } catch (error) {
     console.error('[AWS billing]', error)

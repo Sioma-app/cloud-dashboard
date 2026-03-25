@@ -1,8 +1,8 @@
 import { ClientSecretCredential } from '@azure/identity'
 import { CostManagementClient } from '@azure/arm-costmanagement'
 import { calcPercentChange } from '@/lib/format'
-import { format, startOfMonth, subMonths } from 'date-fns'
-import type { CloudDetailData, Period, ServiceCost } from '@/lib/types'
+import { format, startOfMonth, subMonths, parseISO } from 'date-fns'
+import type { CloudDetailData, ServiceCost } from '@/lib/types'
 
 function getClient() {
   const credential = new ClientSecretCredential(
@@ -28,15 +28,12 @@ async function fetchCosts(startDate: string, endDate: string) {
   })
 }
 
-export async function getAzureMonthlyCosts(period: Period): Promise<CloudDetailData> {
-  const now = new Date()
-  const currentStart = format(startOfMonth(now), 'yyyy-MM-dd')
-  const currentEnd = format(now, 'yyyy-MM-dd')
-  const priorStart = format(startOfMonth(subMonths(now, 1)), 'yyyy-MM-dd')
-  const priorEnd = format(startOfMonth(now), 'yyyy-MM-dd')
+export async function getAzureMonthlyCosts(startDate: string, endDate: string): Promise<CloudDetailData> {
+  const priorStart = format(startOfMonth(subMonths(parseISO(startDate), 1)), 'yyyy-MM-dd')
+  const priorEnd = startDate
 
   const [currentData, priorData] = await Promise.all([
-    fetchCosts(currentStart, currentEnd),
+    fetchCosts(startDate, endDate),
     fetchCosts(priorStart, priorEnd),
   ])
 
@@ -51,7 +48,8 @@ export async function getAzureMonthlyCosts(period: Period): Promise<CloudDetailD
   }
 
   const currentMonthCost = [...serviceMap.values()].reduce((a, b) => a + b, 0)
-  const priorTotal = (priorData.rows ?? []).reduce((sum, row) => sum + Number(row[costIdx]), 0)
+  const priorCostIdx = priorData.columns?.findIndex((c) => c.name === 'Cost') ?? 0
+  const priorTotal = (priorData.rows ?? []).reduce((sum, row) => sum + Number(row[priorCostIdx]), 0)
 
   const topServices: ServiceCost[] = [...serviceMap.entries()]
     .sort(([, a], [, b]) => b - a)

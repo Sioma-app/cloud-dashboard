@@ -4,8 +4,8 @@ import {
   type GetCostAndUsageCommandInput,
 } from '@aws-sdk/client-cost-explorer'
 import { calcPercentChange } from '@/lib/format'
-import { format, startOfMonth, subMonths } from 'date-fns'
-import type { CloudDetailData, MonthlyCost, Period, ServiceCost } from '@/lib/types'
+import { format, startOfMonth, subMonths, parseISO } from 'date-fns'
+import type { CloudDetailData, MonthlyCost, ServiceCost } from '@/lib/types'
 
 function getClient() {
   return new CostExplorerClient({
@@ -31,36 +31,35 @@ async function fetchCosts(startDate: string, endDate: string, groupByService = t
   return response.ResultsByTime ?? []
 }
 
-export async function getAwsMonthlyCosts(period: Period): Promise<CloudDetailData> {
-  const now = new Date()
-  const currentStart = format(startOfMonth(now), 'yyyy-MM-dd')
-  const currentEnd = format(now, 'yyyy-MM-dd')
-  const priorStart = format(startOfMonth(subMonths(now, 1)), 'yyyy-MM-dd')
-  const priorEnd = format(startOfMonth(now), 'yyyy-MM-dd')
-
-  const months = period === 'current' ? 1 : period === '3m' ? 3 : period === '6m' ? 6 : 12
-  const historyStart = format(startOfMonth(subMonths(now, months - 1)), 'yyyy-MM-dd')
+export async function getAwsMonthlyCosts(startDate: string, endDate: string): Promise<CloudDetailData> {
+  const priorStart = format(startOfMonth(subMonths(parseISO(startDate), 1)), 'yyyy-MM-dd')
+  const priorEnd = startDate
 
   const [currentData, priorData, historyData] = await Promise.all([
-    fetchCosts(currentStart, currentEnd, true),
+    fetchCosts(startDate, endDate, true),
     fetchCosts(priorStart, priorEnd, false),
-    fetchCosts(historyStart, currentEnd, false),
+    fetchCosts(startDate, endDate, false),
   ])
 
-  // When GroupBy is used, Total is empty — sum all groups for the real total
-  const allServices = (currentData[0]?.Groups ?? []).map((g) => ({
-    name: g.Keys?.[0] ?? 'Unknown',
-    cost: parseFloat(g.Metrics?.BlendedCost?.Amount ?? '0'),
-  }))
-  const currentMonthCost = allServices.reduce((sum, s) => sum + s.cost, 0)
+  // Aggregate services across all months in the range
+  const serviceMap = new Map<string, number>()
+  for (const month of currentData) {
+    for (const group of month.Groups ?? []) {
+      const name = group.Keys?.[0] ?? 'Unknown'
+      const cost = parseFloat(group.Metrics?.BlendedCost?.Amount ?? '0')
+      serviceMap.set(name, (serviceMap.get(name) ?? 0) + cost)
+    }
+  }
+  const currentMonthCost = [...serviceMap.values()].reduce((a, b) => a + b, 0)
   const priorMonthCost = parseFloat(priorData[0]?.Total?.BlendedCost?.Amount ?? '0')
 
-  const topServices: ServiceCost[] = allServices
-    .sort((a, b) => b.cost - a.cost)
+  const topServices: ServiceCost[] = [...serviceMap.entries()]
+    .sort(([, a], [, b]) => b - a)
     .slice(0, 10)
-    .map((s) => ({
-      ...s,
-      percentOfTotal: currentMonthCost > 0 ? (s.cost / currentMonthCost) * 100 : 0,
+    .map(([name, cost]) => ({
+      name,
+      cost,
+      percentOfTotal: currentMonthCost > 0 ? (cost / currentMonthCost) * 100 : 0,
     }))
 
   const history: MonthlyCost[] = historyData.map((r) => ({

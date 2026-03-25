@@ -2,20 +2,19 @@ import { Suspense } from 'react'
 import { CostBarChart } from '@/components/CostBarChart'
 import { ServiceBreakdownTable } from '@/components/ServiceBreakdownTable'
 import { PeriodSelector } from '@/components/PeriodSelector'
-import { formatCurrency, formatPercent } from '@/lib/format'
+import { formatCurrency, formatPercent, parseDateRangeFromParams } from '@/lib/format'
 import { getGcpMonthlyCosts } from '@/lib/gcp/client'
-import type { Period } from '@/lib/types'
 
 export default async function GcpPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>
+  searchParams: Promise<{ period?: string; from?: string; to?: string }>
 }) {
-  const { period: p } = await searchParams
-  const period = (p ?? 'current') as Period
+  const { period: p, from, to } = await searchParams
+  const range = parseDateRangeFromParams({ period: p, from, to })
   let data
   try {
-    data = await getGcpMonthlyCosts(period)
+    data = await getGcpMonthlyCosts(range.start, range.end)
   } catch (e) {
     console.error('[GCP page]', e)
     return (

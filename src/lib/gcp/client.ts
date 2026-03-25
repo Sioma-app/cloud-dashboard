@@ -1,7 +1,7 @@
 import { BigQuery } from '@google-cloud/bigquery'
-import { calcPercentChange, getDateRange } from '@/lib/format'
-import { format, startOfMonth, subMonths } from 'date-fns'
-import type { CloudDetailData, MonthlyCost, Period, ServiceCost } from '@/lib/types'
+import { calcPercentChange } from '@/lib/format'
+import { format, startOfMonth, subMonths, parseISO } from 'date-fns'
+import type { CloudDetailData, MonthlyCost, ServiceCost } from '@/lib/types'
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID ?? 'desarrollo-375213'
 const DATASET = process.env.GCP_BIGQUERY_DATASET ?? 'Costos'
@@ -85,20 +85,14 @@ async function fetchMonthlyHistory(startDate: string, endDate: string): Promise<
   }))
 }
 
-export async function getGcpMonthlyCosts(period: Period): Promise<CloudDetailData> {
-  const now = new Date()
-  const currentStart = format(startOfMonth(now), 'yyyy-MM-dd')
-  const currentEnd = format(now, 'yyyy-MM-dd')
-  const priorStart = format(startOfMonth(subMonths(now, 1)), 'yyyy-MM-dd')
-  const priorEnd = format(startOfMonth(now), 'yyyy-MM-dd')
-
-  const months = period === 'current' ? 1 : period === '3m' ? 3 : period === '6m' ? 6 : 12
-  const historyStart = format(startOfMonth(subMonths(now, months - 1)), 'yyyy-MM-dd')
+export async function getGcpMonthlyCosts(startDate: string, endDate: string): Promise<CloudDetailData> {
+  const priorStart = format(startOfMonth(subMonths(parseISO(startDate), 1)), 'yyyy-MM-dd')
+  const priorEnd = startDate
 
   const [current, prior, history] = await Promise.all([
-    fetchCostsByService(currentStart, currentEnd),
+    fetchCostsByService(startDate, endDate),
     fetchCostsByService(priorStart, priorEnd),
-    fetchMonthlyHistory(historyStart, currentEnd),
+    fetchMonthlyHistory(startDate, endDate),
   ])
 
   const topServices: ServiceCost[] = current.services.map((s) => ({
