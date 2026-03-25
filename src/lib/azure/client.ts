@@ -1,23 +1,9 @@
 import { ClientSecretCredential } from '@azure/identity'
 import { CostManagementClient } from '@azure/arm-costmanagement'
+import { unstable_cache } from 'next/cache'
 import { calcPercentChange } from '@/lib/format'
 import { format, startOfMonth, subMonths, parseISO, startOfISOWeek } from 'date-fns'
 import type { CloudDetailData, Granularity, MonthlyCost, ServiceCost, StackedPeriod } from '@/lib/types'
-
-// Module-level cache — persists across requests in the same server process.
-// Avoids hitting Azure's strict rate limits on repeated navigations.
-const responseCache = new Map<string, { data: unknown; expiresAt: number }>()
-const CACHE_TTL = 10 * 60 * 1000 // 10 minutes
-
-function getCached<T>(key: string): T | null {
-  const hit = responseCache.get(key)
-  if (!hit || Date.now() > hit.expiresAt) return null
-  return hit.data as T
-}
-
-function setCached(key: string, data: unknown): void {
-  responseCache.set(key, { data, expiresAt: Date.now() + CACHE_TTL })
-}
 
 function getClient() {
   return new CostManagementClient(
@@ -49,31 +35,26 @@ function colIdx(cols: Array<{ name?: string }> | undefined, candidates: string[]
 
 type AzureResult = { columns?: Array<{ name?: string }>; rows?: Array<unknown[]> }
 
-async function queryAzure(
-  startDate: string,
-  endDate: string,
-  granularity: 'Monthly' | 'Daily',
-): Promise<AzureResult> {
-  const key = `azure|${startDate}|${endDate}|${granularity}`
-  const hit = getCached<AzureResult>(key)
-  if (hit) return hit
-
-  const client = getClient()
-  const scope = `/subscriptions/${process.env.AZURE_SUBSCRIPTION_ID}`
-  const result = await client.query.usage(scope, {
-    type: 'Usage',
-    timeframe: 'Custom',
-    timePeriod: { from: new Date(startDate), to: new Date(endDate) },
-    dataset: {
-      granularity,
-      aggregation: { totalCost: { name: 'Cost', function: 'Sum' } },
-      grouping: [{ type: 'Dimension', name: 'ServiceName' }],
-    },
-  }) as AzureResult
-
-  setCached(key, result)
-  return result
-}
+// Wrapped with unstable_cache so the result persists in Vercel's shared cache
+// between serverless invocations (unlike a module-level Map which resets per invocation).
+const queryAzure = unstable_cache(
+  async (startDate: string, endDate: string, granularity: 'Monthly' | 'Daily'): Promise<AzureResult> => {
+    const client = getClient()
+    const scope = `/subscriptions/${process.env.AZURE_SUBSCRIPTION_ID}`
+    return client.query.usage(scope, {
+      type: 'Usage',
+      timeframe: 'Custom',
+      timePeriod: { from: new Date(startDate), to: new Date(endDate) },
+      dataset: {
+        granularity,
+        aggregation: { totalCost: { name: 'Cost', function: 'Sum' } },
+        grouping: [{ type: 'Dimension', name: 'ServiceName' }],
+      },
+    }) as Promise<AzureResult>
+  },
+  ['azure-usage'],
+  { revalidate: 600 }, // 10 minutes
+)
 
 export async function getAzureMonthlyCosts(startDate: string, endDate: string, granularity: Granularity = 'weekly'): Promise<CloudDetailData> {
   const priorStart = format(startOfMonth(subMonths(parseISO(startDate), 1)), 'yyyy-MM-dd')
