@@ -1,7 +1,7 @@
 import { BigQuery } from '@google-cloud/bigquery'
 import { calcPercentChange } from '@/lib/format'
 import { format, startOfMonth, subMonths, parseISO } from 'date-fns'
-import type { CloudDetailData, MonthlyCost, ServiceCost } from '@/lib/types'
+import type { CloudDetailData, MonthlyCost, ServiceCost, StackedPeriod } from '@/lib/types'
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID ?? 'desarrollo-375213'
 const DATASET = process.env.GCP_BIGQUERY_DATASET ?? 'Costos'
@@ -57,6 +57,32 @@ async function fetchCostsByService(startDate: string, endDate: string) {
   return { total, services }
 }
 
+async function fetchWeeklyByService(startDate: string, endDate: string): Promise<Array<Record<string, unknown>>> {
+  const bq = getClient()
+  const table = await getTableName()
+
+  const query = `
+    SELECT
+      FORMAT_DATE('Sem %V', DATE(usage_start_time)) AS period,
+      service.description AS service_name,
+      SUM(cost) AS total_cost
+    FROM \`${table}\`
+    WHERE DATE(usage_start_time) >= @startDate
+      AND DATE(usage_start_time) <= @endDate
+    GROUP BY period, service_name
+    ORDER BY period ASC, total_cost DESC
+  `
+
+  const location = process.env.GCP_BIGQUERY_LOCATION ?? 'US'
+  const [rows] = await bq.query({
+    query,
+    params: { startDate, endDate },
+    location,
+  })
+
+  return rows as Array<Record<string, unknown>>
+}
+
 async function fetchMonthlyHistory(startDate: string, endDate: string): Promise<MonthlyCost[]> {
   const bq = getClient()
   const table = await getTableName()
@@ -89,16 +115,31 @@ export async function getGcpMonthlyCosts(startDate: string, endDate: string): Pr
   const priorStart = format(startOfMonth(subMonths(parseISO(startDate), 1)), 'yyyy-MM-dd')
   const priorEnd = startDate
 
-  const [current, prior, history] = await Promise.all([
+  const [current, prior, history, weeklyRows] = await Promise.all([
     fetchCostsByService(startDate, endDate),
     fetchCostsByService(priorStart, priorEnd),
     fetchMonthlyHistory(startDate, endDate),
+    fetchWeeklyByService(startDate, endDate).catch(() => [] as Array<Record<string, unknown>>),
   ])
 
   const topServices: ServiceCost[] = current.services.map((s) => ({
     name: s.name,
     cost: s.cost,
     percentOfTotal: current.total > 0 ? (s.cost / current.total) * 100 : 0,
+  }))
+
+  const periodMap = new Map<string, Record<string, number>>()
+  for (const row of weeklyRows) {
+    const p = String(row.period)
+    const svc = String(row.service_name)
+    const cost = Number(row.total_cost ?? 0)
+    if (!periodMap.has(p)) periodMap.set(p, {})
+    periodMap.get(p)![svc] = cost
+  }
+  const stackedHistory: StackedPeriod[] = [...periodMap.entries()].map(([period, services]) => ({
+    period,
+    total: Object.values(services).reduce((a, b) => a + b, 0),
+    services,
   }))
 
   return {
@@ -108,5 +149,6 @@ export async function getGcpMonthlyCosts(startDate: string, endDate: string): Pr
     percentChange: calcPercentChange(current.total, prior.total),
     topServices,
     history,
+    stackedHistory,
   }
 }

@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import { CostBarChart } from '@/components/CostBarChart'
+import { StackedServiceChart } from '@/components/StackedServiceChart'
 import { ServiceBreakdownTable } from '@/components/ServiceBreakdownTable'
 import { PeriodSelector } from '@/components/PeriodSelector'
 import { formatCurrency, formatPercent, parseDateRangeFromParams } from '@/lib/format'
@@ -40,10 +41,12 @@ export default async function AzurePage({
         </Suspense>
       </div>
       <div className="mb-8">
-        <h2 className="text-sm text-gray-400 mb-3">Historial de costos</h2>
-        {data.history.length > 0
-          ? <CostBarChart data={data.history} color="#00A4EF" />
-          : <p className="text-gray-500 text-sm">No hay datos históricos disponibles aún.</p>
+        <h2 className="text-sm text-gray-400 mb-3">Consumo por servicio y período</h2>
+        {data.stackedHistory && data.stackedHistory.length > 0
+          ? <StackedServiceChart data={data.stackedHistory} />
+          : data.history.length > 0
+            ? <CostBarChart data={data.history} color="#00A4EF" />
+            : <p className="text-gray-500 text-sm">No hay datos históricos disponibles aún.</p>
         }
       </div>
       <div>

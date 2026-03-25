@@ -2,7 +2,7 @@ import { ClientSecretCredential } from '@azure/identity'
 import { CostManagementClient } from '@azure/arm-costmanagement'
 import { calcPercentChange } from '@/lib/format'
 import { format, startOfMonth, subMonths, parseISO } from 'date-fns'
-import type { CloudDetailData, ServiceCost } from '@/lib/types'
+import type { CloudDetailData, ServiceCost, StackedPeriod } from '@/lib/types'
 
 function getClient() {
   const credential = new ClientSecretCredential(
@@ -60,6 +60,21 @@ export async function getAzureMonthlyCosts(startDate: string, endDate: string): 
       percentOfTotal: currentMonthCost > 0 ? (cost / currentMonthCost) * 100 : 0,
     }))
 
+  const dateIdx = currentData.columns?.findIndex((c) => c.name === 'UsageDate') ?? 2
+  const monthMap = new Map<string, Record<string, number>>()
+  for (const row of currentData.rows ?? []) {
+    const period = String(row[dateIdx]).slice(0, 7)  // YYYY-MM
+    const svc = String(row[nameIdx])
+    const cost = Number(row[costIdx])
+    if (!monthMap.has(period)) monthMap.set(period, {})
+    monthMap.get(period)![svc] = (monthMap.get(period)![svc] ?? 0) + cost
+  }
+  const stackedHistory: StackedPeriod[] = [...monthMap.entries()].map(([period, services]) => ({
+    period,
+    total: Object.values(services).reduce((a, b) => a + b, 0),
+    services,
+  }))
+
   return {
     provider: 'azure',
     currentMonthCost,
@@ -67,5 +82,6 @@ export async function getAzureMonthlyCosts(startDate: string, endDate: string): 
     percentChange: calcPercentChange(currentMonthCost, priorTotal),
     topServices,
     history: [],
+    stackedHistory,
   }
 }

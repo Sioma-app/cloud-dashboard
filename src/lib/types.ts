@@ -20,6 +20,12 @@ export interface MonthlyCost {
   cost: number
 }
 
+export interface StackedPeriod {
+  period: string   // e.g. "Sem 2", "Mar 2026"
+  total: number
+  services: Record<string, number>  // service name -> cost
+}
+
 export interface CloudDetailData {
   provider: CloudProvider
   currentMonthCost: number
@@ -27,6 +33,7 @@ export interface CloudDetailData {
   percentChange: number
   topServices: ServiceCost[]
   history: MonthlyCost[]
+  stackedHistory?: StackedPeriod[]
 }
 
 export interface SummaryData {

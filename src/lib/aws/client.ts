@@ -5,7 +5,7 @@ import {
 } from '@aws-sdk/client-cost-explorer'
 import { calcPercentChange } from '@/lib/format'
 import { format, startOfMonth, subMonths, parseISO } from 'date-fns'
-import type { CloudDetailData, MonthlyCost, ServiceCost } from '@/lib/types'
+import type { CloudDetailData, MonthlyCost, ServiceCost, StackedPeriod } from '@/lib/types'
 
 function getClient() {
   return new CostExplorerClient({
@@ -17,11 +17,16 @@ function getClient() {
   })
 }
 
-async function fetchCosts(startDate: string, endDate: string, groupByService = true) {
+async function fetchCosts(
+  startDate: string,
+  endDate: string,
+  groupByService = true,
+  granularity: 'MONTHLY' | 'DAILY' = 'MONTHLY',
+) {
   const client = getClient()
   const input: GetCostAndUsageCommandInput = {
     TimePeriod: { Start: startDate, End: endDate },
-    Granularity: 'MONTHLY',
+    Granularity: granularity as GetCostAndUsageCommandInput['Granularity'],
     Metrics: ['BlendedCost'],
     ...(groupByService && {
       GroupBy: [{ Type: 'DIMENSION', Key: 'SERVICE' }],
@@ -35,10 +40,11 @@ export async function getAwsMonthlyCosts(startDate: string, endDate: string): Pr
   const priorStart = format(startOfMonth(subMonths(parseISO(startDate), 1)), 'yyyy-MM-dd')
   const priorEnd = startDate
 
-  const [currentData, priorData, historyData] = await Promise.all([
+  const [currentData, priorData, historyData, dailyServiceData] = await Promise.all([
     fetchCosts(startDate, endDate, true),
     fetchCosts(priorStart, priorEnd, false),
     fetchCosts(startDate, endDate, false),
+    fetchCosts(startDate, endDate, true, 'DAILY').catch(() => []),
   ])
 
   // Aggregate services across all months in the range
@@ -67,6 +73,25 @@ export async function getAwsMonthlyCosts(startDate: string, endDate: string): Pr
     cost: parseFloat(r.Total?.BlendedCost?.Amount ?? '0'),
   }))
 
+  const weeklyPeriodMap = new Map<string, Record<string, number>>()
+  for (const day of dailyServiceData) {
+    const dayStart = day.TimePeriod?.Start ?? ''
+    if (!dayStart) continue
+    const d = parseISO(dayStart)
+    const weekLabel = `Sem ${format(d, 'ww')}`
+    for (const group of day.Groups ?? []) {
+      const name = group.Keys?.[0] ?? 'Unknown'
+      const cost = parseFloat(group.Metrics?.BlendedCost?.Amount ?? '0')
+      if (!weeklyPeriodMap.has(weekLabel)) weeklyPeriodMap.set(weekLabel, {})
+      weeklyPeriodMap.get(weekLabel)![name] = (weeklyPeriodMap.get(weekLabel)![name] ?? 0) + cost
+    }
+  }
+  const stackedHistory: StackedPeriod[] = [...weeklyPeriodMap.entries()].map(([period, services]) => ({
+    period,
+    total: Object.values(services).reduce((a, b) => a + b, 0),
+    services,
+  }))
+
   return {
     provider: 'aws',
     currentMonthCost,
@@ -74,5 +99,6 @@ export async function getAwsMonthlyCosts(startDate: string, endDate: string): Pr
     percentChange: calcPercentChange(currentMonthCost, priorMonthCost),
     topServices,
     history,
+    stackedHistory,
   }
 }
