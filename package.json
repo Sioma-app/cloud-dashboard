@@ -13,6 +13,7 @@
     "@aws-sdk/client-cost-explorer": "^3.1016.0",
     "@azure/arm-costmanagement": "^1.0.0-beta.1",
     "@azure/identity": "^4.13.1",
+    "@google-cloud/bigquery": "^8.1.1",
     "@google-cloud/billing": "^5.1.1",
     "date-fns": "^4.1.0",
     "next": "16.2.1",
