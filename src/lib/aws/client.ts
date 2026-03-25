@@ -47,24 +47,21 @@ export async function getAwsMonthlyCosts(period: Period): Promise<CloudDetailDat
     fetchCosts(historyStart, currentEnd, false),
   ])
 
-  const currentMonthCost = parseFloat(currentData[0]?.Total?.BlendedCost?.Amount ?? '0')
+  // When GroupBy is used, Total is empty — sum all groups for the real total
+  const allServices = (currentData[0]?.Groups ?? []).map((g) => ({
+    name: g.Keys?.[0] ?? 'Unknown',
+    cost: parseFloat(g.Metrics?.BlendedCost?.Amount ?? '0'),
+  }))
+  const currentMonthCost = allServices.reduce((sum, s) => sum + s.cost, 0)
   const priorMonthCost = parseFloat(priorData[0]?.Total?.BlendedCost?.Amount ?? '0')
 
-  const rawServices = (currentData[0]?.Groups ?? [])
-    .map((g) => ({
-      name: g.Keys?.[0] ?? 'Unknown',
-      cost: parseFloat(g.Metrics?.BlendedCost?.Amount ?? '0'),
-      percentOfTotal: 0,
-    }))
+  const topServices: ServiceCost[] = allServices
     .sort((a, b) => b.cost - a.cost)
     .slice(0, 10)
-
-  const serviceTotal = rawServices.reduce((sum, s) => sum + s.cost, 0)
-
-  const topServices: ServiceCost[] = rawServices.map((s) => ({
-    ...s,
-    percentOfTotal: serviceTotal > 0 ? (s.cost / serviceTotal) * 100 : 0,
-  }))
+    .map((s) => ({
+      ...s,
+      percentOfTotal: currentMonthCost > 0 ? (s.cost / currentMonthCost) * 100 : 0,
+    }))
 
   const history: MonthlyCost[] = historyData.map((r) => ({
     month: r.TimePeriod?.Start?.slice(0, 7) ?? '',

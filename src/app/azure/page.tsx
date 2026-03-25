@@ -13,7 +13,18 @@ export default async function AzurePage({
 }) {
   const { period: p } = await searchParams
   const period = (p ?? 'current') as Period
-  const data = await getAzureMonthlyCosts(period)
+  let data
+  try {
+    data = await getAzureMonthlyCosts(period)
+  } catch (e) {
+    console.error('[Azure page]', e)
+    return (
+      <div className="p-8 text-center text-gray-400">
+        <p className="text-lg mb-2">No se pudieron cargar los datos de Azure.</p>
+        <p className="text-sm">Error: {e instanceof Error ? e.message : 'Unknown error'}</p>
+      </div>
+    )
+  }
 
   return (
     <div>

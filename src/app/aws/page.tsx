@@ -13,7 +13,18 @@ export default async function AwsPage({
 }) {
   const { period: p } = await searchParams
   const period = (p ?? 'current') as Period
-  const data = await getAwsMonthlyCosts(period)
+  let data
+  try {
+    data = await getAwsMonthlyCosts(period)
+  } catch (e) {
+    console.error('[AWS page]', e)
+    return (
+      <div className="p-8 text-center text-gray-400">
+        <p className="text-lg mb-2">No se pudieron cargar los datos de AWS.</p>
+        <p className="text-sm">Error: {e instanceof Error ? e.message : 'Unknown error'}</p>
+      </div>
+    )
+  }
 
   return (
     <div>
