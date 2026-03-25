@@ -2,6 +2,9 @@ import { Suspense } from 'react'
 import { CloudSummaryCard } from '@/components/CloudSummaryCard'
 import { TotalBar } from '@/components/TotalBar'
 import { PeriodSelector } from '@/components/PeriodSelector'
+import { CostBarChart } from '@/components/CostBarChart'
+import { StackedServiceChart } from '@/components/StackedServiceChart'
+import { ServiceBreakdownTable } from '@/components/ServiceBreakdownTable'
 import { getBillingSummary } from '@/lib/billing/summary'
 import { parseDateRangeFromParams } from '@/lib/format'
 
@@ -9,11 +12,11 @@ import { parseDateRangeFromParams } from '@/lib/format'
 export default async function SummaryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string; from?: string; to?: string }>
+  searchParams: Promise<{ period?: string; from?: string; to?: string; granularity?: string }>
 }) {
-  const { period: p, from, to } = await searchParams
-  const range = parseDateRangeFromParams({ period: p, from, to })
-  const summary = await getBillingSummary(range.start, range.end)
+  const { period: p, from, to, granularity: g } = await searchParams
+  const range = parseDateRangeFromParams({ period: p, from, to, granularity: g })
+  const summary = await getBillingSummary(range.start, range.end, range.granularity ?? 'weekly')
 
   return (
     <div>
@@ -28,6 +31,22 @@ export default async function SummaryPage({
         {summary.clouds.map((cloud) => (
           <CloudSummaryCard key={cloud.provider} cloud={cloud} />
         ))}
+      </div>
+      <div className="mt-8 mb-8">
+        <h2 className="text-sm text-gray-400 mb-3">Consumo total por período</h2>
+        {summary.stackedHistory && summary.stackedHistory.length > 0
+          ? <StackedServiceChart data={summary.stackedHistory} title={`Consumo Total por ${(range.granularity ?? 'weekly') === 'monthly' ? 'Mes' : 'Semana'}`} />
+          : summary.history.length > 0
+            ? <CostBarChart data={summary.history} color="#6366F1" />
+            : <p className="text-gray-500 text-sm">No hay datos históricos disponibles aún.</p>
+        }
+      </div>
+      <div>
+        <h2 className="text-sm text-gray-400 mb-3">Desglose total por servicio</h2>
+        {summary.topServices.length > 0
+          ? <ServiceBreakdownTable services={summary.topServices} />
+          : <p className="text-gray-500 text-sm">No hay datos de servicios disponibles aún.</p>
+        }
       </div>
     </div>
   )

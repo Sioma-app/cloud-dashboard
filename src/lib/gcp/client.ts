@@ -1,7 +1,7 @@
 import { BigQuery } from '@google-cloud/bigquery'
 import { calcPercentChange } from '@/lib/format'
-import { format, startOfMonth, subMonths, parseISO } from 'date-fns'
-import type { CloudDetailData, MonthlyCost, ServiceCost, StackedPeriod } from '@/lib/types'
+import { format, startOfMonth, subMonths, parseISO, startOfISOWeek } from 'date-fns'
+import type { CloudDetailData, Granularity, MonthlyCost, ServiceCost, StackedPeriod } from '@/lib/types'
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID ?? 'desarrollo-375213'
 const DATASET = process.env.GCP_BIGQUERY_DATASET ?? 'Costos'
@@ -61,9 +61,38 @@ async function fetchWeeklyByService(startDate: string, endDate: string): Promise
   const bq = getClient()
   const table = await getTableName()
 
+  // Extend to the Monday of the week containing startDate so all weeks are complete
+  const weekStart = format(startOfISOWeek(parseISO(startDate)), 'yyyy-MM-dd')
+
   const query = `
     SELECT
       FORMAT_DATE('Sem %V', DATE(usage_start_time)) AS period,
+      service.description AS service_name,
+      SUM(cost) AS total_cost
+    FROM \`${table}\`
+    WHERE DATE(usage_start_time) >= @weekStart
+      AND DATE(usage_start_time) <= @endDate
+    GROUP BY period, service_name
+    ORDER BY period ASC, total_cost DESC
+  `
+
+  const location = process.env.GCP_BIGQUERY_LOCATION ?? 'US'
+  const [rows] = await bq.query({
+    query,
+    params: { weekStart, endDate },
+    location,
+  })
+
+  return rows as Array<Record<string, unknown>>
+}
+
+async function fetchMonthlyByService(startDate: string, endDate: string): Promise<Array<Record<string, unknown>>> {
+  const bq = getClient()
+  const table = await getTableName()
+
+  const query = `
+    SELECT
+      FORMAT_DATE('%Y-%m', DATE(usage_start_time)) AS period,
       service.description AS service_name,
       SUM(cost) AS total_cost
     FROM \`${table}\`
@@ -111,15 +140,19 @@ async function fetchMonthlyHistory(startDate: string, endDate: string): Promise<
   }))
 }
 
-export async function getGcpMonthlyCosts(startDate: string, endDate: string): Promise<CloudDetailData> {
+export async function getGcpMonthlyCosts(startDate: string, endDate: string, granularity: Granularity = 'weekly'): Promise<CloudDetailData> {
   const priorStart = format(startOfMonth(subMonths(parseISO(startDate), 1)), 'yyyy-MM-dd')
   const priorEnd = startDate
 
-  const [current, prior, history, weeklyRows] = await Promise.all([
+  const fetchPeriodRows = granularity === 'monthly'
+    ? fetchMonthlyByService(startDate, endDate).catch(() => [] as Array<Record<string, unknown>>)
+    : fetchWeeklyByService(startDate, endDate).catch(() => [] as Array<Record<string, unknown>>)
+
+  const [current, prior, history, periodRows] = await Promise.all([
     fetchCostsByService(startDate, endDate),
     fetchCostsByService(priorStart, priorEnd),
     fetchMonthlyHistory(startDate, endDate),
-    fetchWeeklyByService(startDate, endDate).catch(() => [] as Array<Record<string, unknown>>),
+    fetchPeriodRows,
   ])
 
   const topServices: ServiceCost[] = current.services.map((s) => ({
@@ -129,7 +162,7 @@ export async function getGcpMonthlyCosts(startDate: string, endDate: string): Pr
   }))
 
   const periodMap = new Map<string, Record<string, number>>()
-  for (const row of weeklyRows) {
+  for (const row of periodRows) {
     const p = String(row.period)
     const svc = String(row.service_name)
     const cost = Number(row.total_cost ?? 0)

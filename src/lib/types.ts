@@ -1,5 +1,6 @@
 export type CloudProvider = 'gcp' | 'aws' | 'azure'
 export type Period = 'current' | '3m' | '6m' | '12m'
+export type Granularity = 'weekly' | 'monthly'
 
 export interface CloudCostSummary {
   provider: CloudProvider
@@ -13,6 +14,7 @@ export interface ServiceCost {
   name: string
   cost: number
   percentOfTotal: number
+  provider?: CloudProvider
 }
 
 export interface MonthlyCost {
@@ -41,9 +43,14 @@ export interface SummaryData {
   totalPriorMonth: number
   totalPercentChange: number
   clouds: CloudCostSummary[]
+  // aggregated across all providers
+  topServices: ServiceCost[]
+  stackedHistory?: StackedPeriod[]
+  history: MonthlyCost[]
 }
 
 export interface DateRange {
   start: string  // YYYY-MM-DD
   end: string    // YYYY-MM-DD
+  granularity?: Granularity
 }

@@ -9,13 +9,13 @@ import { getGcpMonthlyCosts } from '@/lib/gcp/client'
 export default async function GcpPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string; from?: string; to?: string }>
+  searchParams: Promise<{ period?: string; from?: string; to?: string; granularity?: string }>
 }) {
-  const { period: p, from, to } = await searchParams
-  const range = parseDateRangeFromParams({ period: p, from, to })
+  const { period: p, from, to, granularity: g } = await searchParams
+  const range = parseDateRangeFromParams({ period: p, from, to, granularity: g })
   let data
   try {
-    data = await getGcpMonthlyCosts(range.start, range.end)
+    data = await getGcpMonthlyCosts(range.start, range.end, range.granularity ?? 'weekly')
   } catch (e) {
     console.error('[GCP page]', e)
     return (
@@ -43,7 +43,7 @@ export default async function GcpPage({
       <div className="mb-8">
         <h2 className="text-sm text-gray-400 mb-3">Consumo por servicio y período</h2>
         {data.stackedHistory && data.stackedHistory.length > 0
-          ? <StackedServiceChart data={data.stackedHistory} />
+          ? <StackedServiceChart data={data.stackedHistory} title={`Consumo GCP por ${(range.granularity ?? 'weekly') === 'monthly' ? 'Mes' : 'Semana'}`} />
           : data.history.length > 0
             ? <CostBarChart data={data.history} color="#4285F4" />
             : <p className="text-gray-500 text-sm">No hay datos históricos disponibles aún.</p>
