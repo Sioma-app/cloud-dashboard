@@ -26,6 +26,18 @@ function formatK(v: number) {
   return v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v.toFixed(0)}`
 }
 
+const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+
+// Convert raw period keys to human-readable labels.
+// "2026-03" → "Mar 2026", "Sem 09" → "Sem 09"
+function formatPeriod(p: string): string {
+  if (/^\d{4}-\d{2}$/.test(p)) {
+    const [year, month] = p.split('-')
+    return `${MONTHS_ES[Number(month) - 1]} ${year}`
+  }
+  return p
+}
+
 // Custom tooltip: only show the segment being hovered, not all services
 function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   if (!active || !payload || payload.length === 0) return null
@@ -40,7 +52,7 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
 
   return (
     <div style={{ background: '#111', border: '1px solid #333', borderRadius: 6, padding: '10px 14px', fontSize: 12 }}>
-      <div style={{ color: '#9ca3af', marginBottom: 6, fontWeight: 600 }}>{label}</div>
+      <div style={{ color: '#9ca3af', marginBottom: 6, fontWeight: 600 }}>{formatPeriod(label ?? '')}</div>
       {items.map((p) => (
         <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, color: p.color, marginBottom: 2 }}>
           <span style={{ color: '#d1d5db' }}>{p.name}</span>
@@ -179,7 +191,7 @@ function downloadStackedChartAsImage(
     ctx.fillStyle = '#6b7280'
     ctx.font = '11px system-ui, sans-serif'
     ctx.textAlign = 'center'
-    ctx.fillText(d.period, x + barWidth / 2, oy + CHART_H + 18)
+    ctx.fillText(formatPeriod(d.period), x + barWidth / 2, oy + CHART_H + 18)
   })
 
   // Legend — two columns below chart, only services with cost > 0
@@ -269,7 +281,7 @@ export function StackedServiceChart({ data, title = 'Consumo por Servicio' }: Pr
       </div>
       <ResponsiveContainer width="100%" height={320}>
         <BarChart data={chartData} margin={{ top: 24, right: 16, left: 0, bottom: 0 }} barCategoryGap="25%">
-          <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#9ca3af' }} />
+          <XAxis dataKey="period" tickFormatter={formatPeriod} tick={{ fontSize: 11, fill: '#9ca3af' }} />
           <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} width={64} tickFormatter={formatK} />
           <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
           {allServices.map((svc, i) => (
