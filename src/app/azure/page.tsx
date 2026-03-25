@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import { CostBarChart } from '@/components/CostBarChart'
 import { StackedServiceChart } from '@/components/StackedServiceChart'
 import { ServiceBreakdownTable } from '@/components/ServiceBreakdownTable'
+import { ServicePieChart } from '@/components/ServicePieChart'
 import { PeriodSelector } from '@/components/PeriodSelector'
 import { formatCurrency, formatPercent, parseDateRangeFromParams } from '@/lib/format'
 import { getAzureMonthlyCosts } from '@/lib/azure/client'
@@ -51,10 +52,14 @@ export default async function AzurePage({
       </div>
       <div>
         <h2 className="text-sm text-gray-400 mb-3">Desglose por servicio</h2>
-        {data.topServices.length > 0
-          ? <ServiceBreakdownTable services={data.topServices} />
-          : <p className="text-gray-500 text-sm">No hay datos de servicios disponibles aún.</p>
-        }
+        {data.topServices.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-6 items-start">
+            <ServicePieChart services={data.topServices} />
+            <ServiceBreakdownTable services={data.topServices} />
+          </div>
+        ) : (
+          <p className="text-gray-500 text-sm">No hay datos de servicios disponibles aún.</p>
+        )}
       </div>
     </div>
   )

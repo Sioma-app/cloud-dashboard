@@ -5,6 +5,7 @@ import { PeriodSelector } from '@/components/PeriodSelector'
 import { CostBarChart } from '@/components/CostBarChart'
 import { StackedServiceChart } from '@/components/StackedServiceChart'
 import { ServiceBreakdownTable } from '@/components/ServiceBreakdownTable'
+import { ServicePieChart } from '@/components/ServicePieChart'
 import { getBillingSummary } from '@/lib/billing/summary'
 import { parseDateRangeFromParams } from '@/lib/format'
 
@@ -43,10 +44,14 @@ export default async function SummaryPage({
       </div>
       <div>
         <h2 className="text-sm text-gray-400 mb-3">Desglose total por servicio</h2>
-        {summary.topServices.length > 0
-          ? <ServiceBreakdownTable services={summary.topServices} />
-          : <p className="text-gray-500 text-sm">No hay datos de servicios disponibles aún.</p>
-        }
+        {summary.topServices.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-6 items-start">
+            <ServicePieChart services={summary.topServices} />
+            <ServiceBreakdownTable services={summary.topServices} />
+          </div>
+        ) : (
+          <p className="text-gray-500 text-sm">No hay datos de servicios disponibles aún.</p>
+        )}
       </div>
     </div>
   )
