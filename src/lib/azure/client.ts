@@ -2,7 +2,7 @@ import { ClientSecretCredential } from '@azure/identity'
 import { CostManagementClient } from '@azure/arm-costmanagement'
 import { unstable_cache } from 'next/cache'
 import { calcPercentChange } from '@/lib/format'
-import { format, startOfMonth, subMonths, parseISO, startOfISOWeek } from 'date-fns'
+import { format, startOfMonth, subMonths, parseISO, startOfWeek } from 'date-fns'
 import type { CloudDetailData, Granularity, MonthlyCost, ServiceCost, StackedPeriod } from '@/lib/types'
 
 function getClient() {
@@ -59,9 +59,10 @@ const queryAzure = unstable_cache(
 export async function getAzureMonthlyCosts(startDate: string, endDate: string, granularity: Granularity = 'weekly'): Promise<CloudDetailData> {
   const priorStart = format(startOfMonth(subMonths(parseISO(startDate), 1)), 'yyyy-MM-dd')
   const priorEnd = startDate
-  // Extend to Monday of first week for complete weekly bins (weekly only)
+  // Weeks run Wed→Wed to avoid BigQuery billing-load delay around Fri queries.
+  // Extend to the Wednesday of the first week for complete weekly bins (weekly only).
   const weekStart = granularity === 'weekly'
-    ? format(startOfISOWeek(parseISO(startDate)), 'yyyy-MM-dd')
+    ? format(startOfWeek(parseISO(startDate), { weekStartsOn: 3 }), 'yyyy-MM-dd')
     : startDate
 
   // Sequential to avoid hitting rate limits on the first cold load
@@ -141,7 +142,7 @@ export async function getAzureMonthlyCosts(startDate: string, endDate: string, g
     for (const row of dailyData.rows ?? []) {
       const dateStr = parseAzureDate(row[dDateIdx])
       if (!dateStr) continue
-      const weekLabel = `Sem ${format(parseISO(dateStr), 'ww')}`
+      const weekLabel = format(startOfWeek(parseISO(dateStr), { weekStartsOn: 3 }), 'yyyy-MM-dd')
       const svc = String(row[dNameIdx] ?? 'Unknown')
       const cost = Number(row[dCostIdx] ?? 0)
       if (!weekMap.has(weekLabel)) weekMap.set(weekLabel, {})

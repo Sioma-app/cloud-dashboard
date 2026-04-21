@@ -4,7 +4,7 @@ import {
   type GetCostAndUsageCommandInput,
 } from '@aws-sdk/client-cost-explorer'
 import { calcPercentChange } from '@/lib/format'
-import { format, startOfMonth, subMonths, parseISO, startOfISOWeek } from 'date-fns'
+import { format, startOfMonth, subMonths, parseISO, startOfWeek } from 'date-fns'
 import type { CloudDetailData, Granularity, MonthlyCost, ServiceCost, StackedPeriod } from '@/lib/types'
 
 function getClient() {
@@ -40,9 +40,10 @@ export async function getAwsMonthlyCosts(startDate: string, endDate: string, gra
   const priorStart = format(startOfMonth(subMonths(parseISO(startDate), 1)), 'yyyy-MM-dd')
   const priorEnd = startDate
 
-  // Extend weekly query to Monday of the first week so all weeks are complete
+  // Weeks run Wed→Wed to avoid BigQuery billing-load delay around Fri queries.
+  // Extend weekly query to the Wednesday of the first week so all weeks are complete.
   const weekStart = granularity === 'weekly'
-    ? format(startOfISOWeek(parseISO(startDate)), 'yyyy-MM-dd')
+    ? format(startOfWeek(parseISO(startDate), { weekStartsOn: 3 }), 'yyyy-MM-dd')
     : startDate
 
   const [currentData, priorData, historyData, dailyServiceData] = await Promise.all([
@@ -106,7 +107,7 @@ export async function getAwsMonthlyCosts(startDate: string, endDate: string, gra
       const dayStart = day.TimePeriod?.Start ?? ''
       if (!dayStart) continue
       const d = parseISO(dayStart)
-      const weekLabel = `Sem ${format(d, 'ww')}`
+      const weekLabel = format(startOfWeek(d, { weekStartsOn: 3 }), 'yyyy-MM-dd')
       for (const group of day.Groups ?? []) {
         const name = group.Keys?.[0] ?? 'Unknown'
         const cost = parseFloat(group.Metrics?.BlendedCost?.Amount ?? '0')
@@ -114,11 +115,13 @@ export async function getAwsMonthlyCosts(startDate: string, endDate: string, gra
         weeklyPeriodMap.get(weekLabel)![name] = (weeklyPeriodMap.get(weekLabel)![name] ?? 0) + cost
       }
     }
-    stackedHistory = [...weeklyPeriodMap.entries()].map(([period, services]) => ({
-      period,
-      total: Object.values(services).reduce((a, b) => a + b, 0),
-      services,
-    }))
+    stackedHistory = [...weeklyPeriodMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([period, services]) => ({
+        period,
+        total: Object.values(services).reduce((a, b) => a + b, 0),
+        services,
+      }))
   }
 
   return {
