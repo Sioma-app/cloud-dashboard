@@ -1,6 +1,6 @@
 import { BigQuery } from '@google-cloud/bigquery'
 import { calcPercentChange } from '@/lib/format'
-import { format, startOfMonth, subMonths, parseISO, startOfISOWeek } from 'date-fns'
+import { format, startOfMonth, subMonths, parseISO, startOfWeek } from 'date-fns'
 import type { CloudDetailData, Granularity, MonthlyCost, ServiceCost, StackedPeriod } from '@/lib/types'
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID ?? 'desarrollo-375213'
@@ -61,12 +61,21 @@ async function fetchWeeklyByService(startDate: string, endDate: string): Promise
   const bq = getClient()
   const table = await getTableName()
 
-  // Extend to the Monday of the week containing startDate so all weeks are complete
-  const weekStart = format(startOfISOWeek(parseISO(startDate)), 'yyyy-MM-dd')
+  // Weeks run Wed→Wed to avoid BigQuery billing-load delay around Fri queries.
+  // Extend to the Wednesday of the week containing startDate so all weeks are complete.
+  const weekStart = format(startOfWeek(parseISO(startDate), { weekStartsOn: 3 }), 'yyyy-MM-dd')
 
+  // BigQuery DAYOFWEEK: 1=Sun, 2=Mon, ..., 4=Wed, ..., 7=Sat.
+  // Days since most-recent Wednesday = MOD(DAYOFWEEK + 3, 7).
   const query = `
     SELECT
-      FORMAT_DATE('Sem %V', DATE(usage_start_time)) AS period,
+      FORMAT_DATE(
+        '%Y-%m-%d',
+        DATE_SUB(
+          DATE(usage_start_time),
+          INTERVAL MOD(EXTRACT(DAYOFWEEK FROM DATE(usage_start_time)) + 3, 7) DAY
+        )
+      ) AS period,
       service.description AS service_name,
       SUM(cost) AS total_cost
     FROM \`${table}\`
