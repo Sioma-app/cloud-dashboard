@@ -29,15 +29,14 @@ function formatK(v: number) {
 const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
 // Convert raw period keys to human-readable labels.
-// "2026-03" → "Mar 2026"; "2026-04-15" (Wed-anchored week start) → "Sem 15 Abr"
+// "2026-03" → "Mar 2026"; "2026-W16" (ISO week of Wed-anchor) → "Sem 16"
 function formatPeriod(p: string): string {
   if (/^\d{4}-\d{2}$/.test(p)) {
     const [year, month] = p.split('-')
     return `${MONTHS_ES[Number(month) - 1]} ${year}`
   }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(p)) {
-    const [, month, day] = p.split('-')
-    return `Sem ${day} ${MONTHS_ES[Number(month) - 1]}`
+  if (/^\d{4}-W\d{2}$/.test(p)) {
+    return `Sem ${p.slice(6)}`
   }
   return p
 }
