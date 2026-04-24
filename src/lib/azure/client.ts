@@ -2,7 +2,7 @@ import { ClientSecretCredential } from '@azure/identity'
 import { CostManagementClient } from '@azure/arm-costmanagement'
 import { unstable_cache } from 'next/cache'
 import { calcPercentChange } from '@/lib/format'
-import { format, startOfMonth, subMonths, parseISO, startOfWeek } from 'date-fns'
+import { format, startOfMonth, subMonths, parseISO, startOfWeek, getISOWeek, getISOWeekYear } from 'date-fns'
 import type { CloudDetailData, Granularity, MonthlyCost, ServiceCost, StackedPeriod } from '@/lib/types'
 
 function getClient() {
@@ -142,7 +142,10 @@ export async function getAzureMonthlyCosts(startDate: string, endDate: string, g
     for (const row of dailyData.rows ?? []) {
       const dateStr = parseAzureDate(row[dDateIdx])
       if (!dateStr) continue
-      const weekLabel = format(startOfWeek(parseISO(dateStr), { weekStartsOn: 3 }), 'yyyy-MM-dd')
+      // Bucket the day into its Wed→Tue week, then label by the ISO week number
+      // of that anchor Wednesday (matches Google Calendar week numbering).
+      const wedStart = startOfWeek(parseISO(dateStr), { weekStartsOn: 3 })
+      const weekLabel = `${getISOWeekYear(wedStart)}-W${String(getISOWeek(wedStart)).padStart(2, '0')}`
       const svc = String(row[dNameIdx] ?? 'Unknown')
       const cost = Number(row[dCostIdx] ?? 0)
       if (!weekMap.has(weekLabel)) weekMap.set(weekLabel, {})
