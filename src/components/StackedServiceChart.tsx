@@ -92,10 +92,13 @@ function downloadStackedChartAsImage(
   const COL_GAP = 16
   const LEGEND_PAD = { top: 16, bottom: 20, left: 16 }
 
-  // Filter services with total cost >= $0.50 (rounds to at least $1 in display)
-  const activeServices = allServices.filter(
-    (svc) => data.reduce((sum, d) => sum + (d.services[svc] ?? 0), 0) >= 0.5
-  )
+  // Legend values reflect the most recent period (last bar on the chart), so
+  // filter and sort services by their cost in that period.
+  const lastPeriod = data[data.length - 1]
+  const lastPeriodCost = (svc: string) => lastPeriod?.services[svc] ?? 0
+  const activeServices = allServices
+    .filter((svc) => lastPeriodCost(svc) >= 0.5)
+    .sort((a, b) => lastPeriodCost(b) - lastPeriodCost(a))
 
   const WIDTH = CHART_W + MARGIN.left + MARGIN.right
   const COLS = 2
@@ -220,7 +223,9 @@ function downloadStackedChartAsImage(
     const x = LEGEND_PAD.left + col * (colW + COL_GAP)
     const y = legendTop + LINE_H + LEGEND_PAD.top + (row + 1) * LINE_H
 
-    const total = data.reduce((sum, d) => sum + (d.services[svc] ?? 0), 0)
+    // Legend shows the cost from the most recent period (not the accumulated
+     // total), so readers see what was spent on each service in the last week.
+    const total = lastPeriodCost(svc)
     const colorIdx = allServices.indexOf(svc)
 
     // Color square
@@ -257,13 +262,21 @@ function downloadStackedChartAsImage(
 export function StackedServiceChart({ data, title = 'Consumo por Servicio' }: Props) {
   if (!data || data.length === 0) return null
 
-  // Sort services by total cost descending so most expensive = bottom of stack
+  // Sort services by total cost descending so most expensive = bottom of stack.
+  // This controls chart stacking and color assignment — keep stable across periods.
   const allServices = [...new Set(data.flatMap((d) => Object.keys(d.services)))]
     .sort((a, b) => {
       const totalA = data.reduce((sum, d) => sum + (d.services[a] ?? 0), 0)
       const totalB = data.reduce((sum, d) => sum + (d.services[b] ?? 0), 0)
       return totalB - totalA
     })
+
+  // Legend is ordered by the most recent period's spend so the top entries
+  // reflect last week's drivers, not the all-time totals.
+  const lastPeriod = data[data.length - 1]
+  const legendServices = [...allServices]
+    .filter((svc) => (lastPeriod?.services[svc] ?? 0) > 0)
+    .sort((a, b) => (lastPeriod?.services[b] ?? 0) - (lastPeriod?.services[a] ?? 0))
 
   const chartData = data.map((d) => ({
     period: d.period,
@@ -301,19 +314,21 @@ export function StackedServiceChart({ data, title = 'Consumo por Servicio' }: Pr
           ))}
         </BarChart>
       </ResponsiveContainer>
-      {/* Compact legend: top 10 services only */}
+      {/* Compact legend: top 10 services by last-period cost. Values shown are
+          the cost in the most recent period, not the accumulated total. */}
       <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 px-2">
-        {allServices.slice(0, 10).map((svc, i) => {
-          const total = data.reduce((sum, d) => sum + (d.services[svc] ?? 0), 0)
+        {legendServices.slice(0, 10).map((svc) => {
+          const last = lastPeriod?.services[svc] ?? 0
+          const colorIdx = allServices.indexOf(svc)
           return (
             <div key={svc} className="flex items-center gap-1 text-xs text-gray-400">
-              <span style={{ width: 10, height: 10, borderRadius: 2, background: COLORS[i % COLORS.length], display: 'inline-block', flexShrink: 0 }} />
-              {svc} ({formatK(total)})
+              <span style={{ width: 10, height: 10, borderRadius: 2, background: COLORS[colorIdx % COLORS.length], display: 'inline-block', flexShrink: 0 }} />
+              {svc} ({formatK(last)})
             </div>
           )
         })}
-        {allServices.length > 10 && (
-          <span className="text-xs text-gray-600">+{allServices.length - 10} más</span>
+        {legendServices.length > 10 && (
+          <span className="text-xs text-gray-600">+{legendServices.length - 10} más</span>
         )}
       </div>
     </div>
