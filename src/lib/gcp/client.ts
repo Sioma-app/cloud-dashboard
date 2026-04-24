@@ -67,10 +67,14 @@ async function fetchWeeklyByService(startDate: string, endDate: string): Promise
 
   // BigQuery DAYOFWEEK: 1=Sun, 2=Mon, ..., 4=Wed, ..., 7=Sat.
   // Days since most-recent Wednesday = MOD(DAYOFWEEK + 3, 7).
+  // The bucket label is the ISO week number (matching Google Calendar) of the
+  // anchor Wednesday. Using the Wed as the reference keeps all 7 days of the
+  // Wed→Tue bucket under the same week number even though Mon/Tue fall in the
+  // next ISO week. Key format: "<iso-year>-W<iso-week>" for sortability.
   const query = `
     SELECT
       FORMAT_DATE(
-        '%Y-%m-%d',
+        '%G-W%V',
         DATE_SUB(
           DATE(usage_start_time),
           INTERVAL MOD(EXTRACT(DAYOFWEEK FROM DATE(usage_start_time)) + 3, 7) DAY

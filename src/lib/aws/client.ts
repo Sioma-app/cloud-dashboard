@@ -4,7 +4,7 @@ import {
   type GetCostAndUsageCommandInput,
 } from '@aws-sdk/client-cost-explorer'
 import { calcPercentChange } from '@/lib/format'
-import { format, startOfMonth, subMonths, parseISO, startOfWeek } from 'date-fns'
+import { format, startOfMonth, subMonths, parseISO, startOfWeek, getISOWeek, getISOWeekYear } from 'date-fns'
 import type { CloudDetailData, Granularity, MonthlyCost, ServiceCost, StackedPeriod } from '@/lib/types'
 
 function getClient() {
@@ -107,7 +107,10 @@ export async function getAwsMonthlyCosts(startDate: string, endDate: string, gra
       const dayStart = day.TimePeriod?.Start ?? ''
       if (!dayStart) continue
       const d = parseISO(dayStart)
-      const weekLabel = format(startOfWeek(d, { weekStartsOn: 3 }), 'yyyy-MM-dd')
+      // Bucket the day into its Wed→Tue week, then label by the ISO week number
+      // of that anchor Wednesday (matches Google Calendar week numbering).
+      const wedStart = startOfWeek(d, { weekStartsOn: 3 })
+      const weekLabel = `${getISOWeekYear(wedStart)}-W${String(getISOWeek(wedStart)).padStart(2, '0')}`
       for (const group of day.Groups ?? []) {
         const name = group.Keys?.[0] ?? 'Unknown'
         const cost = parseFloat(group.Metrics?.BlendedCost?.Amount ?? '0')
